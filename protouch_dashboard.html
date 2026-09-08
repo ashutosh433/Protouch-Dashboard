@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROTOUCH — Live Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --bg-outer:#c9d7ea;
+    --bg-panel:#e7eefb;
+    --card-bg:#f4f8fd;
+    --card-border:#d6e2f2;
+    --text-navy:#1c3f78;
+    --text-navy-soft:#4267a3;
+    --gauge-dark:#173f7a;
+    --gauge-mid:#1f5aa8;
+    --gauge-bar-1:#ffd23f;
+    --gauge-bar-2:#ff8a5b;
+    --gauge-bar-3:#ef4f8f;
+    --top-card-1:#ef3d68;
+    --top-card-2:#c81e5c;
+    --gold:#e8b923;
+    --silver:#a9b4c2;
+    --bronze:#c07a3e;
+    --font-display:'Baloo 2', sans-serif;
+    --font-body:'Nunito', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html, body{ height:100%; }
+  body{
+    margin:0;
+    font-family:var(--font-body);
+    background:var(--bg-outer);
+    padding:18px;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  #scaleWrap{
+    transform-origin: center center;
+    width:100%;
+    max-width:1200px;
+  }
+  .dashboard{
+    max-width:1200px;
+    margin:0 auto;
+    background:var(--bg-panel);
+    border-radius:14px;
+    padding:22px 26px 28px;
+    border:1px solid #ccdaee;
+    position:relative;
+  }
+  .settings-toggle{
+    position:absolute;
+    top:14px;
+    right:16px;
+    width:30px;height:30px;
+    border-radius:50%;
+    background:rgba(28,63,120,0.08);
+    border:none;
+    cursor:pointer;
+    font-size:15px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition: background 0.15s ease, transform 0.15s ease;
+    z-index:5;
+  }
+  .settings-toggle:hover{ background:rgba(28,63,120,0.16); transform:rotate(25deg); }
+  .config-bar, .status-row{
+    transition: opacity 0.4s ease, max-height 0.4s ease, margin 0.4s ease;
+    overflow:hidden;
+  }
+  .controls-hidden .config-bar, .controls-hidden .status-row{
+    opacity:0;
+    max-height:0;
+    margin:0;
+    pointer-events:none;
+  }
+  .header{ text-align:center; margin-bottom:14px; }
+  .header h1{
+    font-family:var(--font-display);
+    color:var(--text-navy);
+    font-size:34px;
+    letter-spacing:1px;
+    margin:0;
+    font-weight:700;
+  }
+  .header .sub{ color:var(--text-navy-soft); font-size:12.5px; margin-top:2px; }
+  .config-bar{
+    display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center;
+    margin-bottom:10px; font-size:12px;
+  }
+  .config-bar input{
+    padding:6px 9px; border-radius:7px; border:1px solid #c6d5eb;
+    font-family:var(--font-body); font-size:12px; width:280px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .config-bar input:hover{ border-color:#9fb7dd; }
+  .config-bar input:focus{ outline:none; border-color:var(--text-navy); box-shadow:0 0 0 2px rgba(28,63,120,0.15); }
+  .config-bar button{
+    padding:7px 14px; border-radius:7px; border:none; background:var(--text-navy);
+    color:#fff; font-family:var(--font-body); font-weight:700; font-size:12px; cursor:pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+  .config-bar button:hover{
+    background:#254e94;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(28,63,120,0.3);
+  }
+  .config-bar button:active{ transform: translateY(0); }
+  .status-row{
+    display:flex; justify-content:center; align-items:center; gap:8px;
+    font-size:12px; margin-bottom:14px; min-height:16px;
+  }
+  .status-dot{ width:9px; height:9px; border-radius:50%; background:#c0392b; display:inline-block; }
+  .status-dot.ok{ background:#2ea043; }
+  .status-text{ color:var(--text-navy-soft); }
+  .status-text.err{ color:#9a3b3b; }
+  .main-grid{ display:grid; grid-template-columns:1fr 300px 1fr; gap:14px; align-items:start; }
+  .team-col{ display:flex; flex-direction:column; gap:8px; }
+  .team-row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--card-bg); border:1px solid var(--card-border); border-radius:10px; padding:8px 12px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    cursor:default;
+  }
+  .team-row:hover{
+    transform: translateY(-3px) scale(1.015);
+    box-shadow: 0 8px 18px rgba(28,63,120,0.14);
+    border-color:#9fb7dd;
+    background:#ffffff;
+  }
+  .team-left-info{ display:flex; align-items:center; gap:10px; }
+  .medal-icon{
+    width:26px;height:26px;border-radius:50%; display:flex;align-items:center;justify-content:center;
+    font-size:14px;color:#fff;flex-shrink:0;
+    transition: transform 0.18s ease;
+  }
+  .team-row:hover .medal-icon{ transform: scale(1.12) rotate(-6deg); }
+  .medal-icon.r1{ background:var(--gold); }
+  .medal-icon.r2{ background:var(--silver); }
+  .medal-icon.r3{ background:var(--bronze); }
+  .medal-icon.rn{ background:#8fa6c9; }
+  .team-name{ font-family:var(--font-display); color:var(--text-navy); font-weight:600; font-size:15px; }
+  .team-pct{ font-weight:800; color:var(--text-navy); font-size:16px; text-align:right; }
+  .center-col{ display:flex; flex-direction:column; gap:10px; }
+  .gauge-card{
+    background:linear-gradient(160deg, var(--gauge-dark), var(--gauge-mid));
+    border-radius:12px; padding:14px 16px 16px; text-align:center; color:#eaf1ff;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .gauge-card:hover{
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 12px 24px rgba(23,63,122,0.35);
+  }
+  .gauge-card .label{ font-size:11px; letter-spacing:.5px; opacity:.85; font-weight:700; }
+  .gauge-card .value{ font-family:var(--font-display); font-size:40px; font-weight:700; margin:2px 0 8px; }
+  .progress-track{ background:#0e2c58; border-radius:20px; height:12px; overflow:hidden; }
+  .progress-fill{ height:100%; border-radius:20px; background:linear-gradient(90deg, var(--gauge-bar-1), var(--gauge-bar-2), var(--gauge-bar-3)); }
+  .gauge-card .foot{ font-size:10px; margin-top:6px; opacity:.8; }
+  .top-team-card{
+    background:linear-gradient(160deg, var(--top-card-1), var(--top-card-2));
+    border-radius:12px; padding:14px 16px 18px; text-align:center; color:#fff;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .top-team-card:hover{
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 12px 24px rgba(200,30,92,0.4);
+  }
+  .top-team-card .label{ font-size:11px; font-weight:700; opacity:.9; }
+  .top-team-card .team{ font-family:var(--font-display); font-size:24px; font-weight:700; margin:4px 0 2px; }
+  .top-team-card .pct{ font-family:var(--font-display); color:#ffe25c; font-size:20px; font-weight:700; }
+  .section-title{
+    text-align:center; color:var(--text-navy); font-family:var(--font-display);
+    font-weight:700; font-size:15px; margin:20px 0 10px;
+  }
+  .advisor-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .advisor-card{
+    background:var(--card-bg); border:1px solid var(--card-border); border-radius:10px;
+    padding:8px 14px 8px 8px; display:flex; align-items:center; gap:8px; min-width:150px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    cursor:default;
+  }
+  .advisor-card:hover{
+    transform: translateY(-4px) scale(1.03);
+    box-shadow: 0 8px 18px rgba(28,63,120,0.16);
+    border-color:#9fb7dd;
+    background:#ffffff;
+  }
+  .avatar{
+    width:34px;height:34px;border-radius:50%; display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:800;font-size:13px; font-family:var(--font-display); border:2px solid;
+    transition: transform 0.18s ease;
+  }
+  .advisor-card:hover .avatar{ transform: scale(1.12) rotate(-6deg); }
+  .avatar.r1{ background:var(--gold); border-color:#c99a10; }
+  .avatar.r2{ background:var(--silver); border-color:#7c8899; }
+  .avatar.r3{ background:var(--bronze); border-color:#8f5b2c; }
+  .avatar.rn{ background:#8fa6c9; border-color:#6d84ab; }
+  .advisor-info .name{ font-weight:800; color:var(--text-navy); font-size:13px; line-height:1.2; }
+  .advisor-info .rev{ font-size:11px; color:var(--text-navy-soft); font-weight:700; }
+  .bottom-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px; }
+  .list-card{
+    background:var(--card-bg); border:1px solid var(--card-border); border-radius:10px; padding:12px 14px;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .list-card:hover{ box-shadow: 0 8px 18px rgba(28,63,120,0.1); border-color:#c2d3ec; }
+  .list-card h3{ margin:0 0 8px; font-family:var(--font-display); color:var(--text-navy); font-size:14px; text-align:center; }
+  .list-card table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .list-card tbody tr{ transition: background 0.15s ease; }
+  .list-card tbody tr:hover{ background:#e3edfb; }
+  .list-card tbody tr:hover td.name{ color:#0e2c58; }
+  .list-card td{ padding:5px 4px; color:var(--text-navy-soft); border-bottom:1px dashed #d6e2f2; }
+  .list-card td.name{ color:var(--text-navy); font-weight:700; transition: color 0.15s ease; }
+  .list-card td.num{ text-align:right; font-weight:800; color:var(--text-navy); }
+  .empty-note{ text-align:center; color:#9aa9c2; font-size:12px; padding:6px 0; }
+  .footer-note{ text-align:center; font-size:10.5px; color:#9aa9c2; margin-top:16px; }
+  @media (max-width:760px){
+    .main-grid{ grid-template-columns:1fr; }
+    .bottom-grid{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="scaleWrap">
+<div class="dashboard" id="dashboardRoot">
+  <button class="settings-toggle" id="settingsToggle" title="Show/hide connection settings">⚙️</button>
+  <div class="header">
+    <h1>PROTOUCH</h1>
+    <div class="sub" id="subHeader">Live Dashboard</div>
+  </div>
+
+  <div class="config-bar">
+    <input id="sheetIdInput" placeholder="Google Sheet ID (from the sheet URL)">
+    <input id="tabInput" placeholder="Tab name" value="Dashboard">
+    <button id="loadBtn">Connect &amp; Load</button>
+  </div>
+  <div class="status-row">
+    <span class="status-dot" id="statusDot"></span>
+    <span class="status-text" id="statusMsg">Not connected — paste your Sheet ID above.</span>
+  </div>
+
+  <div class="main-grid">
+    <div class="team-col" id="teamColLeft"></div>
+
+    <div class="center-col">
+      <div class="gauge-card">
+        <div class="label">ORGANISATIONAL EFFICIENCY</div>
+        <div class="value" id="orgPct">—</div>
+        <div class="progress-track"><div class="progress-fill" id="orgBar" style="width:0%"></div></div>
+        <div class="foot">Average Efficiency Across All Teams</div>
+      </div>
+      <div class="top-team-card">
+        <div class="label">🏆 TOP PERFORMING TEAM</div>
+        <div class="team" id="topTeamName">—</div>
+        <div class="pct" id="topTeamPct">—</div>
+      </div>
+    </div>
+
+    <div class="team-col" id="teamColRight"></div>
+  </div>
+
+  <div class="section-title">🏅 Top 6 Performers</div>
+  <div class="advisor-row" id="advisorRow"></div>
+
+  <div class="bottom-grid">
+    <div class="list-card">
+      <h3>🎯 Hat-Trick List</h3>
+      <table id="hatTrickTable"><tbody></tbody></table>
+    </div>
+    <div class="list-card">
+      <h3>🔥 Hottest Streak</h3>
+      <table id="streakTable"><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="footer-note">Runs entirely in your browser — reads live from Google Sheets, no server, no cost.</div>
+</div>
+</div>
+
+<script>
+const statusMsg = document.getElementById('statusMsg');
+const statusDot = document.getElementById('statusDot');
+const subHeader = document.getElementById('subHeader');
+
+// EDIT THESE TWO LINES to point the dashboard at your real Google Sheet by default.
+// Anyone opening this page (e.g. the office TV) will auto-connect using these,
+// unless this exact browser has previously saved a different Sheet ID/tab.
+const DEFAULT_SHEET_ID = "1I9PV6cR2LICPcDbYUYpGQ90bFVtJsXzKPB4ScgdkNSM";
+const DEFAULT_TAB = "Dashboard";
+
+const LEFT_TEAMS = ["Incredible", "Achiever", "Panthers", "Believer"];
+const RIGHT_TEAMS = ["Rockers", "Invincible", "Avengers"];
+
+function csvUrl(sheetId, tabName){
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+}
+
+function fetchRows(url){
+  return fetch(url).then(r=>{
+    if(!r.ok) throw new Error('Could not reach the sheet. Make sure it is shared as "Anyone with the link can view".');
+    return r.text();
+  }).then(text => new Promise((resolve,reject)=>{
+    Papa.parse(text, {
+      skipEmptyLines:false,
+      complete: res => resolve(res.data),
+      error: err => reject(err)
+    });
+  }));
+}
+
+function norm(s){ return (s||'').toString().trim().toLowerCase(); }
+
+function headerMatches(cellText, label){
+  const c = norm(cellText);
+  const l = norm(label);
+  if(!c) return false;
+  return c === l || c.endsWith(l) || c.includes(l);
+}
+
+function findHeaderRow(rows, startCol, labels){
+  for(let r=0; r<Math.min(rows.length,6); r++){
+    const row = rows[r] || [];
+    let ok = true;
+    for(let i=0;i<labels.length;i++){
+      if(!headerMatches(row[startCol+i], labels[i])){ ok = false; break; }
+    }
+    if(ok) return r;
+  }
+  return -1;
+}
+
+function readBlock(rows, startCol, labels){
+  const headerRowIdx = findHeaderRow(rows, startCol, labels);
+  if(headerRowIdx === -1) return { error: `Could not find columns [${labels.join(', ')}] starting at column ${startCol+1}.`, data: [] };
+  const data = [];
+  for(let r=headerRowIdx+1; r<rows.length; r++){
+    const row = rows[r] || [];
+    const vals = labels.map((_,i) => (row[startCol+i] ?? '').toString().trim());
+    if(vals.every(v => v === '')) continue;
+    data.push(vals);
+  }
+  return { error:null, data };
+}
+
+function toNum(v){
+  if(v===undefined||v===null||v==='') return null;
+  const n = parseFloat(v.toString().replace(/[,₹%\s]/g,''));
+  return isNaN(n) ? null : n;
+}
+
+let lastState = null;
+
+async function loadData(){
+  const sheetId = document.getElementById('sheetIdInput').value.trim();
+  const tab = document.getElementById('tabInput').value.trim() || 'Dashboard';
+  if(!sheetId){
+    setStatus(false, 'Paste your Google Sheet ID above, then click Connect & Load.');
+    return;
+  }
+  setStatus(null, 'Loading…');
+  try{
+    const rows = await fetchRows(csvUrl(sheetId, tab));
+    if(!rows.length) throw new Error('The tab appears to be empty.');
+
+    const teamBlock = readBlock(rows, 0, ['Team','Efficiency %']);
+    const perfBlock  = readBlock(rows, 3, ['Rank','Advisor Name','Revenue Achieved']);
+    const hatBlock   = readBlock(rows, 7, ['Advisor Name','Days Hit']);
+    const streakBlock= readBlock(rows, 10, ['Advisor Name','Streak (days)']);
+
+    if(teamBlock.error){
+      throw new Error(teamBlock.error);
+    }
+
+    lastState = { teamBlock, perfBlock, hatBlock, streakBlock };
+    render();
+    const notes = [`${teamBlock.data.length} teams`];
+    if(!perfBlock.error) notes.push(`${perfBlock.data.length} performers`);
+    if(!hatBlock.error) notes.push(`${hatBlock.data.length} hat-trick rows`);
+    if(!streakBlock.error) notes.push(`${streakBlock.data.length} streak rows`);
+    setStatus(true, `Connected — ${notes.join(', ')}. Updated ${new Date().toLocaleTimeString()}.`);
+    try{
+      localStorage.setItem('protouch_sheet_id', sheetId);
+      localStorage.setItem('protouch_tab', tab);
+    }catch(e){ /* localStorage unavailable — connection still works, just won't be remembered */ }
+  }catch(err){
+    setStatus(false, err.message || 'Something went wrong loading the sheet.');
+  }
+}
+
+function setStatus(ok, text){
+  statusDot.classList.toggle('ok', ok===true);
+  statusMsg.textContent = text;
+  statusMsg.classList.toggle('err', ok===false);
+}
+
+function fmtMoney(n){
+  if(n===null) return '—';
+  if(n>=10000000) return '₹'+(n/10000000).toFixed(2)+'Cr';
+  if(n>=100000) return '₹'+(n/100000).toFixed(2)+'L';
+  if(n>=1000) return '₹'+(n/1000).toFixed(1)+'K';
+  return '₹'+Math.round(n);
+}
+
+function renderTeamRow(container, teamName, teams, rankByTeam){
+  const t = (teams.find(x => norm(x.team) === norm(teamName))) || { team: teamName, eff:null };
+  const rank = rankByTeam[norm(teamName)];
+  const rankClass = rank===0?'r1':rank===1?'r2':rank===2?'r3':'rn';
+  const medal = rank===0?'🥇':rank===1?'🥈':rank===2?'🥉':(rank!==undefined? rank+1 : '–');
+  const row = document.createElement('div');
+  row.className = 'team-row';
+  row.innerHTML = `
+    <div class="team-left-info">
+      <div class="medal-icon ${rankClass}">${medal}</div>
+      <div class="team-name">${t.team}</div>
+    </div>
+    <div class="team-pct">${t.eff!==null? t.eff.toFixed(1)+'%' : '—'}</div>
+  `;
+  container.appendChild(row);
+}
+
+function renderTeamPlaceholders(){
+  const left = document.getElementById('teamColLeft');
+  const right = document.getElementById('teamColRight');
+  left.innerHTML = ''; right.innerHTML = '';
+  LEFT_TEAMS.forEach(t => renderTeamRow(left, t, [], {}));
+  RIGHT_TEAMS.forEach(t => renderTeamRow(right, t, [], {}));
+}
+
+function render(){
+  if(!lastState) return;
+  const { teamBlock, perfBlock, hatBlock, streakBlock } = lastState;
+  subHeader.textContent = 'Live Dashboard — updated ' + new Date().toLocaleString();
+
+  const teams = teamBlock.data.map(([team, effStr]) => {
+    const eff = toNum(effStr);
+    return { team, eff };
+  });
+
+  const orgEff = teams.length && teams.every(t=>t.eff!==null)
+    ? teams.reduce((a,t)=>a+t.eff,0)/teams.length
+    : (teams.filter(t=>t.eff!==null).length
+        ? teams.filter(t=>t.eff!==null).reduce((a,t)=>a+t.eff,0)/teams.filter(t=>t.eff!==null).length
+        : null);
+  document.getElementById('orgPct').textContent = orgEff!==null ? orgEff.toFixed(1)+'%' : '—';
+  document.getElementById('orgBar').style.width = orgEff!==null ? Math.min(orgEff,100)+'%' : '0%';
+
+  const ranked = [...teams].filter(t=>t.eff!==null).sort((a,b)=> b.eff - a.eff);
+  if(ranked.length){
+    document.getElementById('topTeamName').textContent = ranked[0].team;
+    document.getElementById('topTeamPct').textContent = ranked[0].eff.toFixed(2)+'%';
+  }
+
+  const rankByTeam = {};
+  ranked.forEach((t,i)=>{ rankByTeam[norm(t.team)] = i; });
+
+  const left = document.getElementById('teamColLeft');
+  const right = document.getElementById('teamColRight');
+  left.innerHTML = ''; right.innerHTML = '';
+  LEFT_TEAMS.forEach(t => renderTeamRow(left, t, teams, rankByTeam));
+  RIGHT_TEAMS.forEach(t => renderTeamRow(right, t, teams, rankByTeam));
+
+  const advisorRow = document.getElementById('advisorRow');
+  advisorRow.innerHTML = '';
+  if(!perfBlock.error && perfBlock.data.length){
+    perfBlock.data.slice(0,6).forEach(([rankStr, name, revStr], i) => {
+      if(!name) return;
+      const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'rn';
+      const initials = name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+      const card = document.createElement('div');
+      card.className = 'advisor-card';
+      card.innerHTML = `
+        <div class="avatar ${rankClass}">${initials}</div>
+        <div class="advisor-info">
+          <div class="name">${name}</div>
+          <div class="rev">${fmtMoney(toNum(revStr))}</div>
+        </div>`;
+      advisorRow.appendChild(card);
+    });
+  } else {
+    advisorRow.innerHTML = '<div class="empty-note">No performer data yet — fill in the Top 6 Performers block.</div>';
+  }
+
+  const hatBody = document.querySelector('#hatTrickTable tbody');
+  if(!hatBlock.error && hatBlock.data.length){
+    hatBody.innerHTML = hatBlock.data
+      .filter(([name])=>name)
+      .map(([name, days]) => `<tr><td class="name">${name}</td><td class="num">${days || '—'}</td></tr>`)
+      .join('');
+  } else {
+    hatBody.innerHTML = '<tr><td class="empty-note" colspan="2">No hat-trick data yet.</td></tr>';
+  }
+
+  const streakBody = document.querySelector('#streakTable tbody');
+  if(!streakBlock.error && streakBlock.data.length){
+    const rows2 = streakBlock.data.filter(([name])=>name)
+      .map(([name, days]) => ({name, days: toNum(days) ?? 0}))
+      .sort((a,b)=> b.days - a.days);
+    streakBody.innerHTML = rows2.map(r => `<tr><td class="name">${r.name}</td><td class="num">${r.days} days</td></tr>`).join('');
+  } else {
+    streakBody.innerHTML = '<tr><td class="empty-note" colspan="2">No streak data yet.</td></tr>';
+  }
+  requestAnimationFrame(fitToScreen);
+}
+
+document.getElementById('loadBtn').addEventListener('click', loadData);
+setInterval(()=>{ if(document.getElementById('sheetIdInput').value.trim()) loadData(); }, 120000);
+renderTeamPlaceholders();
+window.addEventListener('load', ()=>{ if(typeof fitToScreen === 'function') requestAnimationFrame(fitToScreen); });
+
+// Auto-connect on load: use whatever was last saved in this browser,
+// falling back to the baked-in DEFAULT_SHEET_ID/DEFAULT_TAB above.
+(function autoConnect(){
+  let savedId = '', savedTab = '';
+  try{
+    savedId = localStorage.getItem('protouch_sheet_id') || '';
+    savedTab = localStorage.getItem('protouch_tab') || '';
+  }catch(e){ /* localStorage unavailable, fall back to defaults only */ }
+
+  const sheetId = savedId || DEFAULT_SHEET_ID;
+  const tab = savedTab || DEFAULT_TAB;
+
+  document.getElementById('sheetIdInput').value = sheetId;
+  document.getElementById('tabInput').value = tab;
+
+  if(sheetId) loadData();
+})();
+
+// TV mode: once successfully connected, auto-hide the connection controls
+// after a short delay so only the pure dashboard is visible on screen.
+// A small gear icon lets you bring the settings back any time.
+const dashboardRoot = document.getElementById('dashboardRoot');
+const settingsToggle = document.getElementById('settingsToggle');
+let autoHideTimer = null;
+
+function hideControls(){ dashboardRoot.classList.add('controls-hidden'); }
+function showControls(){ dashboardRoot.classList.remove('controls-hidden'); }
+
+settingsToggle.addEventListener('click', ()=>{
+  if(dashboardRoot.classList.contains('controls-hidden')){
+    showControls();
+  } else {
+    hideControls();
+  }
+});
+
+const _origSetStatus = setStatus;
+setStatus = function(ok, text){
+  _origSetStatus(ok, text);
+  if(ok === true){
+    clearTimeout(autoHideTimer);
+    autoHideTimer = setTimeout(hideControls, 4000);
+  }
+  requestAnimationFrame(fitToScreen);
+};
+
+// TV fit-to-screen: scale the whole dashboard down (never up) so it always
+// fits within the visible window with no scrolling, on any TV resolution.
+const scaleWrap = document.getElementById('scaleWrap');
+function fitToScreen(){
+  scaleWrap.style.transform = 'none';
+  const availW = window.innerWidth - 36;
+  const availH = window.innerHeight - 36;
+  const rect = scaleWrap.getBoundingClientRect();
+  const scale = Math.min(1, availW / rect.width, availH / rect.height);
+  scaleWrap.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', fitToScreen);
+requestAnimationFrame(fitToScreen);
+setTimeout(fitToScreen, 400); // after web fonts load and reflow settles
+</script>
+</body>
+</html>
